@@ -16,8 +16,8 @@ func TestRemoteClient_impl(t *testing.T) {
 }
 
 func TestRemoteClient(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
@@ -38,8 +38,8 @@ func TestRemoteClient(t *testing.T) {
 }
 
 func TestEtcdv3_stateLock(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
@@ -64,8 +64,8 @@ func TestEtcdv3_stateLock(t *testing.T) {
 }
 
 func TestEtcdv3_destroyLock(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 

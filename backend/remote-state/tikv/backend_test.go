@@ -9,12 +9,15 @@ import (
 	"testing"
 	"time"
 
-	etcdv3 "github.com/coreos/etcd/clientv3"
+	"github.com/tikv/client-go/config"
+	"github.com/tikv/client-go/rawkv"
+	"github.com/tikv/client-go/txnkv"
+
 	"github.com/hashicorp/terraform/backend"
 )
 
 var (
-	etcdv3Endpoints = strings.Split(os.Getenv("TF_ETCDV3_ENDPOINTS"), ",")
+	tikvAddresses = strings.Split(os.Getenv("TF_TIKV_PD_ADDRESS"), ",")
 )
 
 const (
@@ -25,48 +28,56 @@ func TestBackend_impl(t *testing.T) {
 	var _ backend.Backend = new(Backend)
 }
 
-func cleanupEtcdv3(t *testing.T) {
-	client, err := etcdv3.New(etcdv3.Config{
-		Endpoints: etcdv3Endpoints,
-	})
+func cleanupTiKV(t *testing.T) {
+	var err error
+	ctx := context.TODO()
+
+	cfg := config.Config{}
+	rawKvClient, err := rawkv.NewClient(ctx, tikvAddresses, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := client.KV.Delete(context.TODO(), keyPrefix, etcdv3.WithPrefix())
+	_, err = txnkv.NewClient(ctx, tikvAddresses, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Cleaned up %d keys.", res.Deleted)
+
+	keyBytes := []byte(keyPrefix)
+	err  = rawKvClient.DeleteRange(ctx, keyBytes, append(keyBytes, byte(127)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Cleaned up all tikv keys.")
 }
 
-func prepareEtcdv3(t *testing.T) {
-	skip := os.Getenv("TF_ACC") == "" && os.Getenv("TF_ETCDV3_TEST") == ""
+func prepareTiKV(t *testing.T) {
+	skip := os.Getenv("TF_ACC") == "" && os.Getenv("TF_TIKV_TEST") == ""
 	if skip {
-		t.Log("etcd server tests require setting TF_ACC or TF_ETCDV3_TEST")
+		t.Log("tikv server tests require setting TF_ACC or TF_TIKV_TEST")
 		t.Skip()
 	}
-	if reflect.DeepEqual(etcdv3Endpoints, []string{""}) {
-		t.Fatal("etcd server tests require setting TF_ETCDV3_ENDPOINTS")
+	if reflect.DeepEqual(tikvAddresses, []string{""}) {
+		t.Fatal("tikv server tests require setting TF_TIKV_PD_ADDRESS")
 	}
-	cleanupEtcdv3(t)
+	cleanupTiKV(t)
 }
 
 func TestBackend(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
-		"prefix":    prefix,
+		"pd_address": tikvAddresses,
+		"prefix":     prefix,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
-		"prefix":    prefix,
+		"pd_address": tikvAddresses,
+		"prefix":     prefix,
 	}))
 
 	// Test
@@ -76,22 +87,22 @@ func TestBackend(t *testing.T) {
 }
 
 func TestBackend_lockDisabled(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
-		"prefix":    prefix,
-		"lock":      false,
+		"pd_address": tikvAddresses,
+		"prefix":     prefix,
+		"lock":       false,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
-		"prefix":    prefix + "/" + "different", // Diff so locking test would fail if it was locking
-		"lock":      false,
+		"pd_address": tikvAddresses,
+		"prefix":     prefix + "/" + "different", // Diff so locking test would fail if it was locking
+		"lock":       false,
 	}))
 
 	// Test
