@@ -3,85 +3,56 @@ package tikv
 import (
 	"context"
 
-	etcdv3 "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/pkg/transport"
+	"github.com/tikv/client-go/config"
+	"github.com/tikv/client-go/rawkv"
+	"github.com/tikv/client-go/txnkv"
+
 	"github.com/hashicorp/terraform/backend"
 	"github.com/hashicorp/terraform/helper/schema"
-)
-
-const (
-	endpointsKey       = "endpoints"
-	usernameKey        = "username"
-	usernameEnvVarName = "ETCDV3_USERNAME"
-	passwordKey        = "password"
-	passwordEnvVarName = "ETCDV3_PASSWORD"
-	prefixKey          = "prefix"
-	lockKey            = "lock"
-	cacertPathKey      = "cacert_path"
-	certPathKey        = "cert_path"
-	keyPathKey         = "key_path"
 )
 
 func New() backend.Backend {
 	s := &schema.Backend{
 		Schema: map[string]*schema.Schema{
-			endpointsKey: &schema.Schema{
+			"pd_address": &schema.Schema{
 				Type: schema.TypeList,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
 				MinItems:    1,
 				Required:    true,
-				Description: "Endpoints for the etcd cluster.",
+				Description: "address of the tikv pd cluster.",
 			},
 
-			usernameKey: &schema.Schema{
+			"path": &schema.Schema{
 				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Username used to connect to the etcd cluster.",
-				DefaultFunc: schema.EnvDefaultFunc(usernameEnvVarName, ""),
+				Required:    true,
+				Description: "Path to store state in TiKV",
 			},
 
-			passwordKey: &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Password used to connect to the etcd cluster.",
-				DefaultFunc: schema.EnvDefaultFunc(passwordEnvVarName, ""),
-			},
-
-			prefixKey: &schema.Schema{
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "An optional prefix to be added to keys when to storing state in etcd.",
-				Default:     "",
-			},
-
-			lockKey: &schema.Schema{
+			"lock": &schema.Schema{
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Description: "Whether to lock state access.",
+				Description: "Lock state access",
 				Default:     true,
 			},
 
-			cacertPathKey: &schema.Schema{
+			"ca_file": &schema.Schema{
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "The path to a PEM-encoded CA bundle with which to verify certificates of TLS-enabled etcd servers.",
-				Default:     "",
+				Description: "A path to a PEM-encoded certificate authority used to verify the remote agent's certificate.",
 			},
 
-			certPathKey: &schema.Schema{
+			"cert_file": &schema.Schema{
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "The path to a PEM-encoded certificate to provide to etcd for secure client identification.",
-				Default:     "",
+				Description: "A path to a PEM-encoded certificate provided to the remote agent; requires use of key_file.",
 			},
 
-			keyPathKey: &schema.Schema{
+			"key_file": &schema.Schema{
 				Type:        schema.TypeString,
 				Optional:    true,
-				Description: "The path to a PEM-encoded key to provide to etcd for secure client identification.",
-				Default:     "",
+				Description: "A path to a PEM-encoded private key, required if cert_file is specified.",
 			},
 		},
 	}
@@ -95,63 +66,52 @@ type Backend struct {
 	*schema.Backend
 
 	// The fields below are set from configure.
-	client *etcdv3.Client
+	rawKvClient *rawkv.Client
+	txnKvClient *txnkv.Client
 	data   *schema.ResourceData
 	lock   bool
-	prefix string
 }
 
 func (b *Backend) configure(ctx context.Context) error {
 	var err error
+
 	// Grab the resource data.
 	b.data = schema.FromContextBackendConfig(ctx)
+
 	// Store the lock information.
-	b.lock = b.data.Get(lockKey).(bool)
-	// Store the prefix information.
-	b.prefix = b.data.Get(prefixKey).(string)
-	// Initialize a client to test config.
-	b.client, err = b.rawClient()
-	// Return err, if any.
+	b.lock = b.data.Get("lock").(bool)
+	cfg := config.Config{}
+	if v, ok := b.data.GetOk("ca_file"); ok && v.(string) != "" {
+		cfg.RPC.Security.SSLCA = v.(string)
+	}
+	if v, ok := b.data.GetOk("cert_file"); ok && v.(string) != "" {
+		cfg.RPC.Security.SSLCert = v.(string)
+	}
+	if v, ok := b.data.GetOk("key_file"); ok && v.(string) != "" {
+		cfg.RPC.Security.SSLKey = v.(string)
+	}
+
+	// Initialize tikv client
+	pdAddresses := retrieveAddresses(b.data.Get("pd_address"))
+	b.rawKvClient, err = rawkv.NewClient(ctx, pdAddresses, cfg)
+	if err != nil {
+		return err
+	}
+
+	b.txnKvClient, err = txnkv.NewClient(ctx, pdAddresses, cfg)
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 
-func (b *Backend) rawClient() (*etcdv3.Client, error) {
-	config := etcdv3.Config{}
-	tlsInfo := transport.TLSInfo{}
 
-	if v, ok := b.data.GetOk(endpointsKey); ok {
-		config.Endpoints = retrieveEndpoints(v)
-	}
-	if v, ok := b.data.GetOk(usernameKey); ok && v.(string) != "" {
-		config.Username = v.(string)
-	}
-	if v, ok := b.data.GetOk(passwordKey); ok && v.(string) != "" {
-		config.Password = v.(string)
-	}
-	if v, ok := b.data.GetOk(cacertPathKey); ok && v.(string) != "" {
-		tlsInfo.TrustedCAFile = v.(string)
-	}
-	if v, ok := b.data.GetOk(certPathKey); ok && v.(string) != "" {
-		tlsInfo.CertFile = v.(string)
-	}
-	if v, ok := b.data.GetOk(keyPathKey); ok && v.(string) != "" {
-		tlsInfo.KeyFile = v.(string)
-	}
-
-	if tlsCfg, err := tlsInfo.ClientConfig(); err != nil {
-		return nil, err
-	} else if !tlsInfo.Empty() {
-		config.TLS = tlsCfg // Assign TLS configuration only if it valid and non-empty.
-	}
-
-	return etcdv3.New(config)
-}
-
-func retrieveEndpoints(v interface{}) []string {
-	var endpoints []string
+func retrieveAddresses(v interface{}) []string {
+	var addresses []string
 	list := v.([]interface{})
-	for _, ep := range list {
-		endpoints = append(endpoints, ep.(string))
+	for _, addr := range list {
+		addresses = append(addresses, addr.(string))
 	}
-	return endpoints
+	return addresses
 }
