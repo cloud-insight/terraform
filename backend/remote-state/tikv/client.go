@@ -45,11 +45,11 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	}
 
 	payload := res
-	md5 := md5.Sum(payload)
+	md5Sum := md5.Sum(payload)
 
 	return &remote.Payload{
 		Data: payload,
-		MD5:  md5[:],
+		MD5:  md5Sum[:],
 	}, nil
 }
 

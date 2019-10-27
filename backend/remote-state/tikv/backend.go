@@ -80,7 +80,7 @@ func (b *Backend) configure(ctx context.Context) error {
 
 	// Store the lock information.
 	b.lock = b.data.Get("lock").(bool)
-	cfg := config.Config{}
+	cfg := config.Default()
 	if v, ok := b.data.GetOk("ca_file"); ok && v.(string) != "" {
 		cfg.RPC.Security.SSLCA = v.(string)
 	}
