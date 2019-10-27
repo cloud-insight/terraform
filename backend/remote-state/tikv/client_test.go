@@ -23,8 +23,8 @@ func TestRemoteClient(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
-		"prefix":    prefix,
+		"pd_address": tikvAddressesCty,
+		"prefix":     prefix,
 	}))
 
 	// Grab the client
@@ -45,16 +45,16 @@ func TestTiKV_stateLock(t *testing.T) {
 
 	// Get the backend
 	s1, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
-		"prefix":    prefix,
+		"pd_address": tikvAddressesCty,
+		"prefix":     prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	s2, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
-		"prefix":    prefix,
+		"pd_address": tikvAddressesCty,
+		"prefix":     prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
 		t.Fatal(err)
@@ -71,8 +71,8 @@ func TestTiKV_destroyLock(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
-		"prefix":    prefix,
+		"pd_address": tikvAddressesCty,
+		"prefix":     prefix,
 	}))
 
 	// Grab the client

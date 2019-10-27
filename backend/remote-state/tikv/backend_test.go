@@ -3,26 +3,34 @@ package tikv
 import (
 	"context"
 	"fmt"
+	"github.com/tikv/client-go/config"
+	"github.com/tikv/client-go/rawkv"
+	"github.com/tikv/client-go/txnkv"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tikv/client-go/config"
-	"github.com/tikv/client-go/rawkv"
-	"github.com/tikv/client-go/txnkv"
-
 	"github.com/hashicorp/terraform/backend"
 )
 
 var (
-	tikvAddresses = strings.Split(os.Getenv("TF_TIKV_PD_ADDRESS"), ",")
+	tikvAddresses    = strings.Split(os.Getenv("TF_TIKV_PD_ADDRESS"), ",")
+	tikvAddressesCty = loadPDAddressesFromEnv(tikvAddresses)
 )
 
 const (
 	keyPrefix = "tf-unit"
 )
+
+func loadPDAddressesFromEnv(addresses []string) []interface{} {
+	var vL []interface{}
+	for _, addr := range addresses {
+		vL = append(vL, addr)
+	}
+	return vL
+}
 
 func TestBackend_impl(t *testing.T) {
 	var _ backend.Backend = new(Backend)
@@ -32,7 +40,7 @@ func cleanupTiKV(t *testing.T) {
 	var err error
 	ctx := context.TODO()
 
-	cfg := config.Config{}
+	cfg := config.Default()
 	rawKvClient, err := rawkv.NewClient(ctx, tikvAddresses, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +52,7 @@ func cleanupTiKV(t *testing.T) {
 	}
 
 	keyBytes := []byte(keyPrefix)
-	err  = rawKvClient.DeleteRange(ctx, keyBytes, append(keyBytes, byte(127)))
+	err = rawKvClient.DeleteRange(ctx, keyBytes, append(keyBytes, byte(127)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +79,12 @@ func TestBackend(t *testing.T) {
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
+		"pd_address": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
+		"pd_address": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
@@ -94,13 +102,13 @@ func TestBackend_lockDisabled(t *testing.T) {
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
+		"pd_address": tikvAddressesCty,
 		"prefix":     prefix,
 		"lock":       false,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddresses,
+		"pd_address": tikvAddressesCty,
 		"prefix":     prefix + "/" + "different", // Diff so locking test would fail if it was locking
 		"lock":       false,
 	}))

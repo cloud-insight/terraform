@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/terraform/state"
+	"github.com/hashicorp/terraform/state/remote"
 	_ "github.com/tikv/client-go/config"
 	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
-	"github.com/hashicorp/terraform/state"
-	"github.com/hashicorp/terraform/state/remote"
 )
 
 const (
@@ -57,7 +57,7 @@ func (c *RemoteClient) Put(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	err := c.rawKvClient.Put(context.TODO(),[]byte(c.Key), []byte(data))
+	err := c.rawKvClient.Put(context.TODO(), []byte(c.Key), []byte(data))
 	if err != nil {
 		return err
 	}
@@ -103,10 +103,10 @@ func (c *RemoteClient) deleteLockInfo(info *state.LockInfo) error {
 		return err
 	}
 	/*
-	if res.Deleted == 0 {
-		return fmt.Errorf("No keys deleted for %s when deleting lock info.", c.Key+lockInfoSuffix)
-	}
-	 */
+		if res.Deleted == 0 {
+			return fmt.Errorf("No keys deleted for %s when deleting lock info.", c.Key+lockInfoSuffix)
+		}
+	*/
 	return nil
 }
 
@@ -162,4 +162,3 @@ func (c *RemoteClient) lock() (string, error) {
 func (c *RemoteClient) unlock(id string) error {
 	return c.deleteLockInfo(c.info)
 }
-

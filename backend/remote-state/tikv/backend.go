@@ -24,7 +24,7 @@ func New() backend.Backend {
 				Description: "address of the tikv pd cluster.",
 			},
 
-			"path": &schema.Schema{
+			"prefix": &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "Path to store state in TiKV",
@@ -68,8 +68,8 @@ type Backend struct {
 	// The fields below are set from configure.
 	rawKvClient *rawkv.Client
 	txnKvClient *txnkv.Client
-	data   *schema.ResourceData
-	lock   bool
+	data        *schema.ResourceData
+	lock        bool
 }
 
 func (b *Backend) configure(ctx context.Context) error {
@@ -105,7 +105,6 @@ func (b *Backend) configure(ctx context.Context) error {
 
 	return err
 }
-
 
 func retrieveAddresses(v interface{}) []string {
 	var addresses []string

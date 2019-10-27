@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	keyEnvPrefix = "-env:"
+	keyEnvPrefix  = "-env:"
 	maxWorkspaces = 10000
 )
 
 func (b *Backend) Workspaces() ([]string, error) {
 	// List our raw path
-	prefix := b.data.Get("path").(string) + keyEnvPrefix
+	prefix := b.data.Get("prefix").(string) + keyEnvPrefix
 	endKey := append([]byte(prefix), byte(127))
 	keys, _, err := b.rawKvClient.Scan(context.TODO(), []byte(prefix), endKey, maxWorkspaces)
 	if err != nil {
@@ -137,7 +137,7 @@ func (b *Backend) StateMgr(name string) (statemgr.Full, error) {
 }
 
 func (b *Backend) path(name string) string {
-	path := b.data.Get("path").(string)
+	path := b.data.Get("prefix").(string)
 	if name != backend.DefaultStateName {
 		path += fmt.Sprintf("%s%s", keyEnvPrefix, name)
 	}
