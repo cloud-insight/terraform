@@ -9,11 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/terraform/state"
-	"github.com/hashicorp/terraform/state/remote"
 	_ "github.com/tikv/client-go/config"
 	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
+	"github.com/tikv/client-go/txnkv/kv"
+
+	"github.com/hashicorp/terraform/state"
+	"github.com/hashicorp/terraform/state/remote"
 )
 
 const (
@@ -141,7 +143,7 @@ func (c *RemoteClient) lock() (string, error) {
 		return "", err
 	}
 	resp, err := tx.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
-	if err != nil {
+	if err != nil && !kv.IsErrNotFound(err){
 		return "", &state.LockError{Err: err}
 	}
 	if resp != nil {
