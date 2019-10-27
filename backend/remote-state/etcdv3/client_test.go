@@ -16,8 +16,8 @@ func TestRemoteClient_impl(t *testing.T) {
 }
 
 func TestRemoteClient(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
@@ -28,18 +28,18 @@ func TestRemoteClient(t *testing.T) {
 	}))
 
 	// Grab the client
-	state, err := b.StateMgr(backend.DefaultStateName)
+	s, err := b.StateMgr(backend.DefaultStateName)
 	if err != nil {
 		t.Fatalf("Error: %s.", err)
 	}
 
 	// Test
-	remote.TestClient(t, state.(*remote.State).Client)
+	remote.TestClient(t, s.(*remote.State).Client)
 }
 
-func TestEtcdv3_stateLock(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+func TestTiKV_stateLock(t *testing.T) {
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
@@ -63,9 +63,9 @@ func TestEtcdv3_stateLock(t *testing.T) {
 	remote.TestRemoteLocks(t, s1.(*remote.State).Client, s2.(*remote.State).Client)
 }
 
-func TestEtcdv3_destroyLock(t *testing.T) {
-	prepareEtcdv3(t)
-	defer cleanupEtcdv3(t)
+func TestTiKV_destroyLock(t *testing.T) {
+	prepareTiKV(t)
+	defer cleanupTiKV(t)
 
 	prefix := fmt.Sprintf("%s/%s/", keyPrefix, time.Now().Format(time.RFC3339))
 
