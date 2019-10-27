@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/tikv/client-go/config"
+	_ "github.com/tikv/client-go/config"
 	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
 	"github.com/hashicorp/go-multierror"
@@ -36,18 +37,15 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	res, err := c.Client.KV.Get(context.TODO(), c.Key)
+	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.Key))
 	if err != nil {
 		return nil, err
 	}
-	if res.Count == 0 {
+	if res == nil {
 		return nil, nil
 	}
-	if res.Count >= 2 {
-		return nil, fmt.Errorf("Expected a single result but got %d.", res.Count)
-	}
 
-	payload := res.Kvs[0].Value
+	payload := res
 	md5 := md5.Sum(payload)
 
 	return &remote.Payload{
@@ -60,21 +58,9 @@ func (c *RemoteClient) Put(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	res, err := etcdv3.NewKV(c.Client).Txn(context.TODO()).If(
-		etcdv3.Compare(etcdv3.ModRevision(c.Key), "=", c.modRevision),
-	).Then(
-		etcdv3.OpPut(c.Key, string(data)),
-		etcdv3.OpGet(c.Key),
-	).Commit()
-
+	err := c.rawKvClient.Put(context.TODO(),[]byte(c.Key), []byte(data))
 	if err != nil {
 		return err
-	}
-	if !res.Succeeded {
-		return fmt.Errorf("The transaction did not succeed.")
-	}
-	if len(res.Responses) != 2 {
-		return fmt.Errorf("Expected two responses but got %d.", len(res.Responses))
 	}
 
 	return nil
@@ -84,7 +70,7 @@ func (c *RemoteClient) Delete() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	_, err := c.Client.KV.Delete(context.TODO(), c.Key)
+	err := c.rawKvClient.Delete(context.TODO(), []byte(c.Key))
 	return err
 }
 
@@ -94,9 +80,6 @@ func (c *RemoteClient) Lock(info *state.LockInfo) (string, error) {
 
 	if !c.DoLock {
 		return "", nil
-	}
-	if c.etcdSession != nil {
-		return "", fmt.Errorf("state %q already locked", c.Key)
 	}
 
 	c.info = info
@@ -115,27 +98,30 @@ func (c *RemoteClient) Unlock(id string) error {
 }
 
 func (c *RemoteClient) deleteLockInfo(info *state.LockInfo) error {
-	res, err := c.Client.KV.Delete(context.TODO(), c.Key+lockInfoSuffix)
+	// TODO check delete not existed item
+	err := c.rawKvClient.Delete(context.TODO(), []byte(c.Key+lockInfoSuffix))
 	if err != nil {
 		return err
 	}
+	/*
 	if res.Deleted == 0 {
 		return fmt.Errorf("No keys deleted for %s when deleting lock info.", c.Key+lockInfoSuffix)
 	}
+	 */
 	return nil
 }
 
-func (c *RemoteClient) getLockInfo() (*state.LockInfo, error) {
-	res, err := c.Client.KV.Get(context.TODO(), c.Key+lockInfoSuffix)
+func (c *RemoteClient) getLockInfo(tx *txnkv.Transaction) (*state.LockInfo, error) {
+	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
 	if err != nil {
 		return nil, err
 	}
-	if res.Count == 0 {
+	if res == nil {
 		return nil, nil
 	}
 
 	li := &state.LockInfo{}
-	err = json.Unmarshal(res.Kvs[0].Value, li)
+	err = json.Unmarshal(res, li)
 	if err != nil {
 		return nil, fmt.Errorf("Error unmarshaling lock info: %s.", err)
 	}
@@ -143,65 +129,38 @@ func (c *RemoteClient) getLockInfo() (*state.LockInfo, error) {
 	return li, nil
 }
 
-func (c *RemoteClient) putLockInfo(info *state.LockInfo) error {
-	c.info.Path = c.etcdMutex.Key()
+func (c *RemoteClient) putLockInfo(tx *txnkv.Transaction, info *state.LockInfo) error {
+	//c.info.Path = c.etcdMutex.Key()
 	c.info.Created = time.Now().UTC()
-
-	_, err := c.Client.KV.Put(context.TODO(), c.Key+lockInfoSuffix, string(c.info.Marshal()))
+	err := tx.Set([]byte(c.Key+lockInfoSuffix), []byte(string(c.info.Marshal())))
 	return err
 }
 
 func (c *RemoteClient) lock() (string, error) {
-	session, err := etcdv3sync.NewSession(c.Client)
+	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
-		return "", nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.TODO(), lockAcquireTimeout)
-	defer cancel()
-
-	mutex := etcdv3sync.NewMutex(session, c.Key)
-	if err1 := mutex.Lock(ctx); err1 != nil {
-		lockInfo, err2 := c.getLockInfo()
-		if err2 != nil {
-			return "", &state.LockError{Err: err2}
-		}
-		return "", &state.LockError{Info: lockInfo, Err: err1}
-	}
-
-	c.etcdMutex = mutex
-	c.etcdSession = session
-
-	err = c.putLockInfo(c.info)
-	if err != nil {
-		if unlockErr := c.unlock(c.info.ID); unlockErr != nil {
-			err = multierror.Append(err, unlockErr)
-		}
 		return "", err
 	}
-
+	resp, err := tx.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
+	if err != nil {
+		return "", &state.LockError{Err: err}
+	}
+	if resp != nil {
+		lockInfo, err := c.getLockInfo(tx)
+		if err != nil {
+			return "", &state.LockError{Err: err}
+		}
+		return "", &state.LockError{Info: lockInfo, Err: errors.New("lock is conflict")}
+	}
+	err = c.putLockInfo(tx, c.info)
+	if err != nil {
+		return "", &state.LockError{Err: err}
+	}
+	tx.Commit(context.TODO())
 	return c.info.ID, nil
 }
 
 func (c *RemoteClient) unlock(id string) error {
-	if c.etcdMutex == nil {
-		return nil
-	}
-
-	var errs error
-
-	if err := c.deleteLockInfo(c.info); err != nil {
-		errs = multierror.Append(errs, err)
-	}
-	if err := c.etcdMutex.Unlock(context.TODO()); err != nil {
-		errs = multierror.Append(errs, err)
-	}
-	if err := c.etcdSession.Close(); err != nil {
-		errs = multierror.Append(errs, err)
-	}
-
-	c.etcdMutex = nil
-	c.etcdSession = nil
-
-	return errs
+	return c.deleteLockInfo(c.info)
 }
+

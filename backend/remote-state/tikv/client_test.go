@@ -23,7 +23,7 @@ func TestRemoteClient(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
+		"pd_address": tikvAddresses,
 		"prefix":    prefix,
 	}))
 
@@ -37,7 +37,7 @@ func TestRemoteClient(t *testing.T) {
 	remote.TestClient(t, state.(*remote.State).Client)
 }
 
-func TestEtcdv3_stateLock(t *testing.T) {
+func TestTikv_stateLock(t *testing.T) {
 	prepareTiKV(t)
 	defer cleanupTiKV(t)
 
@@ -45,7 +45,7 @@ func TestEtcdv3_stateLock(t *testing.T) {
 
 	// Get the backend
 	s1, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
+		"pd_address": tikvAddresses,
 		"prefix":    prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestEtcdv3_stateLock(t *testing.T) {
 	}
 
 	s2, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
+		"pd_address": tikvAddresses,
 		"prefix":    prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestEtcdv3_destroyLock(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"endpoints": etcdv3Endpoints,
+		"pd_address": tikvAddresses,
 		"prefix":    prefix,
 	}))
 
@@ -93,11 +93,11 @@ func TestEtcdv3_destroyLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := c.Client.KV.Get(context.TODO(), c.info.Path)
+	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.info.Path))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Count != 0 {
-		t.Fatalf("lock key not cleaned up at: %s", string(res.Kvs[0].Key))
+	if res != nil {
+		t.Fatalf("lock key not cleaned up at: %s", c.info.Path)
 	}
 }
