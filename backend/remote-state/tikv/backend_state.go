@@ -7,6 +7,7 @@ import (
 	"github.com/tikv/client-go/txnkv"
 	"strings"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform/backend"
 	"github.com/hashicorp/terraform/state"
 	"github.com/hashicorp/terraform/state/remote"
@@ -58,7 +59,14 @@ func (b *Backend) DeleteWorkspace(name string) error {
 
 	// Delete it. We just delete it without any locking since
 	// the DeleteState API is documented as such.
-	err := b.rawKvClient.Delete(context.TODO(), []byte(path))
+	tx, err := b.txnKvClient.Begin(context.TODO())
+	if err != nil {
+		return err
+	}
+	err = tx.Delete([]byte(path))
+	if e := tx.Commit(context.TODO()); e != nil {
+		err = multierror.Append(err, e)
+	}
 	return err
 }
 
