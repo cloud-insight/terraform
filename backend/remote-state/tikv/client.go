@@ -12,7 +12,6 @@ import (
 	_ "github.com/tikv/client-go/config"
 	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
-	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform/state"
 	"github.com/hashicorp/terraform/state/remote"
 )

@@ -64,7 +64,7 @@ func (b *Backend) DeleteWorkspace(name string) error {
 
 	// Delete it. We just delete it without any locking since
 	// the DeleteState API is documented as such.
-	err := b.rawKvClient.Delete(context.TODO(), path)
+	err := b.rawKvClient.Delete(context.TODO(), []byte(path))
 	return err
 }
 

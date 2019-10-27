@@ -28,16 +28,16 @@ func TestRemoteClient(t *testing.T) {
 	}))
 
 	// Grab the client
-	state, err := b.StateMgr(backend.DefaultStateName)
+	s, err := b.StateMgr(backend.DefaultStateName)
 	if err != nil {
 		t.Fatalf("Error: %s.", err)
 	}
 
 	// Test
-	remote.TestClient(t, state.(*remote.State).Client)
+	remote.TestClient(t, s.(*remote.State).Client)
 }
 
-func TestTikv_stateLock(t *testing.T) {
+func TestTiKV_stateLock(t *testing.T) {
 	prepareTiKV(t)
 	defer cleanupTiKV(t)
 
@@ -63,7 +63,7 @@ func TestTikv_stateLock(t *testing.T) {
 	remote.TestRemoteLocks(t, s1.(*remote.State).Client, s2.(*remote.State).Client)
 }
 
-func TestEtcdv3_destroyLock(t *testing.T) {
+func TestTiKV_destroyLock(t *testing.T) {
 	prepareTiKV(t)
 	defer cleanupTiKV(t)
 
