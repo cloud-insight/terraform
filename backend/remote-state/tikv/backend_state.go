@@ -3,6 +3,8 @@ package tikv
 import (
 	"context"
 	"fmt"
+	"github.com/tikv/client-go/key"
+	"github.com/tikv/client-go/txnkv"
 	"strings"
 
 	"github.com/hashicorp/terraform/backend"
@@ -14,34 +16,26 @@ import (
 
 const (
 	keyEnvPrefix  = "-env:"
-	maxWorkspaces = 10000
 )
 
 func (b *Backend) Workspaces() ([]string, error) {
 	// List our raw path
 	prefix := b.data.Get("prefix").(string) + keyEnvPrefix
-	endKey := append([]byte(prefix), byte(127))
-	keys, _, err := b.rawKvClient.Scan(context.TODO(), []byte(prefix), endKey, maxWorkspaces)
+	keys, err := getKeys(b.txnKvClient, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find the envs, we use a map since we can get duplicates with
-	// path suffixes.
 	envs := map[string]struct{}{}
-	for _, keyBytes := range keys {
-		key := string(keyBytes)
-		// Consul should ensure this but it doesn't hurt to check again
-		if strings.HasPrefix(key, prefix) {
-			key = strings.TrimPrefix(key, prefix)
+	for _, k := range keys {
+		if strings.HasPrefix(k, prefix) {
+			k = strings.TrimPrefix(k, prefix)
 
-			// Ignore anything with a "/" in it since we store the state
-			// directly in a key not a directory.
-			if idx := strings.IndexRune(key, '/'); idx >= 0 {
+			if idx := strings.IndexRune(k, '/'); idx >= 0 {
 				continue
 			}
 
-			envs[key] = struct{}{}
+			envs[k] = struct{}{}
 		}
 	}
 
@@ -134,6 +128,37 @@ func (b *Backend) StateMgr(name string) (statemgr.Full, error) {
 	}
 
 	return stateMgr, nil
+}
+
+func getKeys(txnKvClient *txnkv.Client, prefix string) ([]string, error) {
+	ctx := context.TODO()
+	txn, err := txnKvClient.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	it, err := txn.Iter(ctx, key.Key(prefix), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []string
+	prefixKey := key.Key(prefix)
+
+	for it.Valid() {
+		if !it.Key().HasPrefix(prefixKey) {
+			break
+		}
+
+		keys = append(keys, string(it.Key()))
+
+		err = it.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return keys, nil
 }
 
 func (b *Backend) path(name string) string {

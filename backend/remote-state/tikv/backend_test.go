@@ -38,13 +38,18 @@ func cleanupTiKV(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = txnkv.NewClient(ctx, tikvAddresses, cfg)
+	txnKvClient, err := txnkv.NewClient(ctx, tikvAddresses, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	keyBytes := []byte(keyPrefix)
-	err = rawKvClient.DeleteRange(ctx, keyBytes, append(keyBytes, byte(127)))
+	keys, err := getKeys(txnKvClient, keyPrefix)
+	var keysBytes [][]byte
+	for _, k := range keys {
+		keysBytes = append(keysBytes, []byte(k))
+	}
+
+	err = rawKvClient.BatchDelete(ctx, keysBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
