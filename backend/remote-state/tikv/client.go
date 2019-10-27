@@ -182,6 +182,7 @@ func (c *RemoteClient) lock() (string, error) {
 	if err != nil {
 		return "", &state.LockError{Info: c.info, Err: err}
 	}
+
 	return c.info.ID, nil
 }
 
