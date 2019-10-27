@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/go-multierror"
+	"github.com/tikv/client-go/rawkv"
 	"sync"
 	"time"
 
 	_ "github.com/tikv/client-go/config"
-	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
 	"github.com/tikv/client-go/txnkv/kv"
 
@@ -37,9 +38,18 @@ type RemoteClient struct {
 func (c *RemoteClient) Get() (*remote.Payload, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.Key))
+	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		tx.Commit(context.TODO())
+	}()
+	res, err := tx.Get(context.TODO(), []byte(c.Key))
+	if err != nil {
+		if kv.IsErrNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if res == nil {
@@ -58,20 +68,28 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 func (c *RemoteClient) Put(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	err := c.rawKvClient.Put(context.TODO(), []byte(c.Key), []byte(data))
+	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
 		return err
 	}
-
-	return nil
+	err = tx.Set([]byte(c.Key), []byte(data))
+	if e := tx.Commit(context.TODO()); e != nil {
+		err = multierror.Append(err, e)
+	}
+	return err
 }
 
 func (c *RemoteClient) Delete() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	err := c.rawKvClient.Delete(context.TODO(), []byte(c.Key))
+	tx, err := c.txnKvClient.Begin(context.TODO())
+	if err != nil {
+		return err
+	}
+	err = tx.Delete([]byte(c.Key))
+	if e := tx.Commit(context.TODO()); e != nil {
+		err = multierror.Append(err, e)
+	}
 	return err
 }
 
@@ -99,28 +117,28 @@ func (c *RemoteClient) Unlock(id string) error {
 }
 
 func (c *RemoteClient) deleteLockInfo(info *state.LockInfo) error {
-	// TODO check delete not existed item
-	err := c.rawKvClient.Delete(context.TODO(), []byte(c.Key+lockInfoSuffix))
+	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
-		return err
+		return &state.LockError{Err: err}
 	}
-	/*
-		if res.Deleted == 0 {
-			return fmt.Errorf("No keys deleted for %s when deleting lock info.", c.Key+lockInfoSuffix)
-		}
-	*/
+	err = tx.Delete([]byte(c.Key+lockInfoSuffix))
+	if e := tx.Commit(context.TODO()); e != nil {
+		err = multierror.Append(err, e)
+	}
+	if err != nil {
+		return &state.LockError{Err: err}
+	}
 	return nil
 }
 
 func (c *RemoteClient) getLockInfo(tx *txnkv.Transaction) (*state.LockInfo, error) {
-	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
+	res, err := tx.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
 	if err != nil {
+		if kv.IsErrNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	if res == nil {
-		return nil, nil
-	}
-
 	li := &state.LockInfo{}
 	err = json.Unmarshal(res, li)
 	if err != nil {
@@ -140,24 +158,30 @@ func (c *RemoteClient) putLockInfo(tx *txnkv.Transaction, info *state.LockInfo) 
 func (c *RemoteClient) lock() (string, error) {
 	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
-		return "", err
+		return "", &state.LockError{Err: err}
 	}
+
 	resp, err := tx.Get(context.TODO(), []byte(c.Key+lockInfoSuffix))
 	if err != nil && !kv.IsErrNotFound(err){
 		return "", &state.LockError{Err: err}
 	}
 	if resp != nil {
 		lockInfo, err := c.getLockInfo(tx)
-		if err != nil {
-			return "", &state.LockError{Err: err}
+		if err == nil {
+			err = errors.New("lock is conflict")
 		}
-		return "", &state.LockError{Info: lockInfo, Err: errors.New("lock is conflict")}
+		if e := tx.Commit(context.TODO()); e != nil {
+			err = multierror.Append(err, e)
+		}
+		return "", &state.LockError{Info: lockInfo, Err: err}
 	}
 	err = c.putLockInfo(tx, c.info)
-	if err != nil {
-		return "", &state.LockError{Err: err}
+	if e := tx.Commit(context.TODO()); e != nil {
+		err = multierror.Append(err, e)
 	}
-	tx.Commit(context.TODO())
+	if err != nil {
+		return "", &state.LockError{Info: c.info, Err: err}
+	}
 	return c.info.ID, nil
 }
 
