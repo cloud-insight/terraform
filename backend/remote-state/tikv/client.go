@@ -155,7 +155,10 @@ func (c *RemoteClient) lock() (string, error) {
 	if err != nil {
 		return "", &state.LockError{Err: err}
 	}
-	tx.Commit(context.TODO())
+	err = tx.Commit(context.TODO())
+	if err != nil {
+		return "", &state.LockError{Err: err}
+	}
 	return c.info.ID, nil
 }
 

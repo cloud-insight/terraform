@@ -24,14 +24,6 @@ const (
 	keyPrefix = "tf-unit"
 )
 
-func loadPDAddressesFromEnv(addresses []string) []interface{} {
-	var vL []interface{}
-	for _, addr := range addresses {
-		vL = append(vL, addr)
-	}
-	return vL
-}
-
 func TestBackend_impl(t *testing.T) {
 	var _ backend.Backend = new(Backend)
 }
@@ -69,6 +61,14 @@ func prepareTiKV(t *testing.T) {
 		t.Fatal("tikv server tests require setting TF_TIKV_PD_ADDRESS")
 	}
 	cleanupTiKV(t)
+}
+
+func loadPDAddressesFromEnv(addresses []string) []interface{} {
+	var vL []interface{}
+	for _, addr := range addresses {
+		vL = append(vL, addr)
+	}
+	return vL
 }
 
 func TestBackend(t *testing.T) {
