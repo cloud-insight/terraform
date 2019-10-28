@@ -3,14 +3,15 @@ package tikv
 import (
 	"context"
 	"fmt"
-	"github.com/tikv/client-go/config"
-	"github.com/tikv/client-go/rawkv"
-	"github.com/tikv/client-go/txnkv"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tikv/client-go/config"
+	"github.com/tikv/client-go/key"
+	"github.com/tikv/client-go/txnkv"
 
 	"github.com/hashicorp/terraform/backend"
 )
@@ -33,26 +34,24 @@ func cleanupTiKV(t *testing.T) {
 	ctx := context.TODO()
 
 	cfg := config.Default()
-	rawKvClient, err := rawkv.NewClient(ctx, tikvAddresses, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	txnKvClient, err := txnkv.NewClient(ctx, tikvAddresses, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	keys, err := getKeys(txnKvClient, keyPrefix)
-	var keysBytes [][]byte
-	for _, k := range keys {
-		keysBytes = append(keysBytes, []byte(k))
-	}
-
-	err = rawKvClient.BatchDelete(ctx, keysBytes)
+	txn, err := txnKvClient.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	for _, k := range keys {
+		err = txn.Delete(key.Key(k))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	t.Logf("Cleaned up all tikv keys.")
 }
 
@@ -84,12 +83,12 @@ func TestBackend(t *testing.T) {
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
@@ -107,13 +106,13 @@ func TestBackend_lockDisabled(t *testing.T) {
 
 	// Get the backend. We need two to test locking.
 	b1 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 		"lock":       false,
 	}))
 
 	b2 := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix + "/" + "different", // Diff so locking test would fail if it was locking
 		"lock":       false,
 	}))

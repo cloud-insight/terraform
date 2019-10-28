@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tikv/client-go/config"
-	"github.com/tikv/client-go/rawkv"
 	"github.com/tikv/client-go/txnkv"
 
 	"github.com/hashicorp/terraform/backend"
@@ -14,7 +13,7 @@ import (
 func New() backend.Backend {
 	s := &schema.Backend{
 		Schema: map[string]*schema.Schema{
-			"pd_address": &schema.Schema{
+			"pd_addresses": &schema.Schema{
 				Type: schema.TypeList,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -65,8 +64,6 @@ func New() backend.Backend {
 type Backend struct {
 	*schema.Backend
 
-	// The fields below are set from configure.
-	rawKvClient *rawkv.Client
 	txnKvClient *txnkv.Client
 	data        *schema.ResourceData
 	lock        bool
@@ -92,12 +89,7 @@ func (b *Backend) configure(ctx context.Context) error {
 	}
 
 	// Initialize tikv client
-	pdAddresses := retrieveAddresses(b.data.Get("pd_address"))
-	b.rawKvClient, err = rawkv.NewClient(ctx, pdAddresses, cfg)
-	if err != nil {
-		return err
-	}
-
+	pdAddresses := retrieveAddresses(b.data.Get("pd_addresses"))
 	b.txnKvClient, err = txnkv.NewClient(ctx, pdAddresses, cfg)
 	if err != nil {
 		return err

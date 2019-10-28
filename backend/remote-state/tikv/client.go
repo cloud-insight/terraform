@@ -6,11 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/go-multierror"
-	"github.com/tikv/client-go/rawkv"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	_ "github.com/tikv/client-go/config"
 	"github.com/tikv/client-go/txnkv"
 	"github.com/tikv/client-go/txnkv/kv"
@@ -20,7 +19,6 @@ import (
 )
 
 const (
-	lockAcquireTimeout = 2 * time.Second
 	lockInfoSuffix     = ".lockinfo"
 )
 
@@ -29,7 +27,6 @@ type RemoteClient struct {
 	DoLock bool
 	Key    string
 
-	rawKvClient *rawkv.Client
 	txnKvClient *txnkv.Client
 	info        *state.LockInfo
 	mu          sync.Mutex
@@ -40,17 +37,20 @@ func (c *RemoteClient) Get() (*remote.Payload, error) {
 	defer c.mu.Unlock()
 	tx, err := c.txnKvClient.Begin(context.TODO())
 	if err != nil {
-		return nil, err
+		return nil, &state.LockError{Err: err}
 	}
-	defer func() {
-		tx.Commit(context.TODO())
-	}()
+
 	res, err := tx.Get(context.TODO(), []byte(c.Key))
-	if err != nil {
-		if kv.IsErrNotFound(err) {
-			return nil, nil
+	if err != nil && !kv.IsErrNotFound(err) {
+		// ignore not found error
+		err = multierror.Append(err, err)
+	} else {
+		if e := tx.Commit(context.TODO()); e != nil {
+			err = multierror.Append(err, e)
 		}
-		return nil, err
+	}
+	if err != nil {
+		return nil, &state.LockError{Err: err}
 	}
 	if res == nil {
 		return nil, nil

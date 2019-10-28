@@ -3,9 +3,10 @@ package tikv
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/tikv/client-go/key"
 	"github.com/tikv/client-go/txnkv"
-	"strings"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/terraform/backend"
@@ -77,7 +78,6 @@ func (b *Backend) StateMgr(name string) (statemgr.Full, error) {
 	// Build the state client
 	var stateMgr = &remote.State{
 		Client: &RemoteClient{
-			rawKvClient: b.rawKvClient,
 			txnKvClient: b.txnKvClient,
 			Key:         path,
 			DoLock:      b.lock,

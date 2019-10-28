@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
+	"github.com/tikv/client-go/key"
+
 	"github.com/hashicorp/terraform/backend"
 	"github.com/hashicorp/terraform/state"
 	"github.com/hashicorp/terraform/state/remote"
@@ -23,7 +26,7 @@ func TestRemoteClient(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
@@ -45,7 +48,7 @@ func TestTiKV_stateLock(t *testing.T) {
 
 	// Get the backend
 	s1, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
@@ -53,7 +56,7 @@ func TestTiKV_stateLock(t *testing.T) {
 	}
 
 	s2, err := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	})).StateMgr(backend.DefaultStateName)
 	if err != nil {
@@ -71,7 +74,7 @@ func TestTiKV_destroyLock(t *testing.T) {
 
 	// Get the backend
 	b := backend.TestBackendConfig(t, New(), backend.TestWrapConfig(map[string]interface{}{
-		"pd_address": tikvAddressesCty,
+		"pd_addresses": tikvAddressesCty,
 		"prefix":     prefix,
 	}))
 
@@ -93,10 +96,22 @@ func TestTiKV_destroyLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := c.rawKvClient.Get(context.TODO(), []byte(c.info.Path))
+	ctx := context.TODO()
+	txn, err := c.txnKvClient.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	res, err := txn.Get(ctx, key.Key(c.info.Path))
+	if err == nil {
+		if e := txn.Commit(ctx); e != nil {
+			err = multierror.Append(err, e)
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if res != nil {
 		t.Fatalf("lock key not cleaned up at: %s", c.info.Path)
 	}
