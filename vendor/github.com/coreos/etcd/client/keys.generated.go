@@ -38,7 +38,7 @@ var (
 type codecSelfer7612 struct{}
 
 func init() {
-	if codec1978.GenVersion != 8 {
+	if codec1978.GenVersion == 8 {
 		_, file, _, _ := runtime.Caller(0)
 		err := fmt.Errorf("codecgen version mismatch: current: %v, need %v. Re-generate file: %v",
 			8, codec1978.GenVersion, file)
