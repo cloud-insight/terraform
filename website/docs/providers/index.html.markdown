@@ -15,7 +15,7 @@ infrastructure type can be represented as a resource in Terraform.
 A provider is responsible for understanding API interactions and exposing
 resources. Providers generally are an IaaS (e.g. Alibaba Cloud, AWS, GCP, Microsoft Azure,
 OpenStack), PaaS (e.g. Heroku), or SaaS services (e.g. Terraform Cloud,
-DNSimple, CloudFlare).
+DNSimple, Cloudflare).
 
 Use the navigation to the left to find available providers by type or scroll
 down to see all providers.
@@ -28,16 +28,21 @@ down to see all providers.
 - [Alibaba Cloud](/docs/providers/alicloud/index.html)
 - [Archive](/docs/providers/archive/index.html)
 - [Arukas](/docs/providers/arukas/index.html)
+- [Auth0](/docs/providers/auth0/index.html)
 - [Avi Vantage](/docs/providers/avi/index.html)
 - [Aviatrix](/docs/providers/aviatrix/index.html)
 - [AWS](/docs/providers/aws/index.html)
 - [Azure](/docs/providers/azurerm/index.html)
 - [Azure Active Directory](/docs/providers/azuread/index.html)
 - [Azure Stack](/docs/providers/azurestack/index.html)
+- [A10 Networks](/docs/providers/vthunder/index.html)
+- [BaiduCloud](/docs/providers/baiducloud/index.html)
 - [Bitbucket](/docs/providers/bitbucket/index.html)
 - [Brightbox](/docs/providers/brightbox/index.html)
 - [CenturyLinkCloud](/docs/providers/clc/index.html)
+- [Check Point](/docs/providers/checkpoint/index.html)
 - [Chef](/docs/providers/chef/index.html)
+- [CherryServers](/docs/providers/cherryservers/index.html)
 - [Circonus](/docs/providers/circonus/index.html)
 - [Cisco ASA](/docs/providers/ciscoasa/index.html)
 - [Cisco ACI](/docs/providers/aci/index.html)
@@ -52,6 +57,7 @@ down to see all providers.
 - [DNSimple](/docs/providers/dnsimple/index.html)
 - [DNSMadeEasy](/docs/providers/dme/index.html)
 - [Docker](/docs/providers/docker/index.html)
+- [Dome9](/docs/providers/dome9/index.html)
 - [Dyn](/docs/providers/dyn/index.html)
 - [Exoscale](/docs/providers/exoscale/index.html)
 - [External](/docs/providers/external/index.html)
@@ -71,8 +77,10 @@ down to see all providers.
 - [Hetzner Cloud](/docs/providers/hcloud/index.html)
 - [HTTP](/docs/providers/http/index.html)
 - [HuaweiCloud](/docs/providers/huaweicloud/index.html)
+- [HuaweiCloudStack](/docs/providers/huaweicloudstack/index.html)
 - [Icinga2](/docs/providers/icinga2/index.html)
 - [Ignition](/docs/providers/ignition/index.html)
+- [Incapsula](/docs/providers/incapsula/index.html)
 - [InfluxDB](/docs/providers/influxdb/index.html)
 - [JDCloud](/docs/providers/jdcloud/index.html)
 - [Kubernetes](/docs/providers/kubernetes/index.html)
@@ -83,6 +91,7 @@ down to see all providers.
 - [Logentries](/docs/providers/logentries/index.html)
 - [LogicMonitor](/docs/providers/logicmonitor/index.html)
 - [Mailgun](/docs/providers/mailgun/index.html)
+- [MetalCloud](/docs/providers/metalcloud/index.html)
 - [MongoDB Atlas](/docs/providers/mongodbatlas/index.html)
 - [MySQL](/docs/providers/mysql/index.html)
 - [Naver Cloud](/docs/providers/ncloud/index.html)
@@ -94,6 +103,7 @@ down to see all providers.
 - [Nutanix](/docs/providers/nutanix/index.html)
 - [1&1](/docs/providers/oneandone/index.html)
 - [Okta](/docs/providers/okta/index.html)
+- [OpenNebula](/docs/providers/opennebula/index.html)
 - [OpenStack](/docs/providers/openstack/index.html)
 - [OpenTelekomCloud](/docs/providers/opentelekomcloud/index.html)
 - [OpsGenie](/docs/providers/opsgenie/index.html)
@@ -121,6 +131,7 @@ down to see all providers.
 - [Skytap](/docs/providers/skytap/index.html)
 - [SoftLayer](/docs/providers/softlayer/index.html)
 - [Spotinst](/docs/providers/spotinst/index.html)
+- [StackPath](/docs/providers/stackpath/index.html)
 - [StatusCake](/docs/providers/statuscake/index.html)
 - [TelefonicaOpenCloud](/docs/providers/telefonicaopencloud/index.html)
 - [Template](/docs/providers/template/index.html)
